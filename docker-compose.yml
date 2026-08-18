@@ -1,0 +1,67 @@
+services:
+  ollama:
+    build: .
+    image: qwen3-ollama:0.6b
+    container_name: qwen3-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      MODEL: qwen3:0.6b
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_KEEP_ALIVE: 24h
+    restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: qwen3-webui
+    ports:
+      - "3000:8080"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      WEBUI_AUTH: "false"
+      DEFAULT_MODELS: qwen3:0.6b
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - webui_data:/app/backend/data
+    restart: unless-stopped
+
+  live-chat:
+    image: python:3.12-alpine
+    container_name: qwen3-live-chat
+    ports:
+      - "3001:3001"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODEL: qwen3:0.6b
+      PORT: "3001"
+    volumes:
+      - ./scripts/live_chat.py:/app/live_chat.py:ro
+    command: ["python", "-u", "/app/live_chat.py"]
+    restart: unless-stopped
+
+  bench:
+    image: python:3.12-alpine
+    profiles: ["bench"]
+    container_name: qwen3-bench
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODEL: qwen3:0.6b
+      NUM_PREDICT: "128"
+      ROUNDS: "3"
+    volumes:
+      - ./scripts/bench.py:/bench.py:ro
+    command: ["python", "/bench.py"]
+
+volumes:
+  ollama_data:
+  webui_data:
