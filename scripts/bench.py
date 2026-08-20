@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mide latencia y tokens/s de Qwen3 0.6B contra la API de Ollama."""
+"""Mide latencia y tokens/s de Phi-4 Mini contra la API de Ollama."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ import urllib.error
 import urllib.request
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-MODEL = os.environ.get("MODEL", "qwen3:0.6b")
+MODEL = os.environ.get("MODEL", "phi4-mini")
+NUM_CTX = int(os.environ.get("NUM_CTX", "2048"))
+NUM_THREAD = int(os.environ.get("NUM_THREAD", "10"))
 PROMPT = os.environ.get(
     "PROMPT",
     "Escribe un resumen concreto de 8 oraciones sobre cómo funciona Docker.",
@@ -49,6 +51,8 @@ def post_generate(think: bool) -> dict:
         "think": think,
         "options": {
             "num_predict": NUM_PREDICT,
+            "num_ctx": NUM_CTX,
+            "num_thread": NUM_THREAD,
             "temperature": 0.2,
         },
     }
@@ -73,6 +77,8 @@ def post_stream_ttft(think: bool) -> float:
         "think": think,
         "options": {
             "num_predict": NUM_PREDICT,
+            "num_ctx": NUM_CTX,
+            "num_thread": NUM_THREAD,
             "temperature": 0.2,
         },
     }

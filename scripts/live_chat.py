@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chat en vivo: muestra el thinking de Qwen3 mientras responde."""
+"""Chat en vivo contra Phi-4 Mini (CPU, contexto corto)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-MODEL = os.environ.get("MODEL", "qwen3:0.6b")
+MODEL = os.environ.get("MODEL", "phi4-mini")
 PORT = int(os.environ.get("PORT", "3001"))
-ALLOWED_MODELS = ("qwen3:0.6b", "qwen3:1.7b")
+NUM_CTX = int(os.environ.get("NUM_CTX", "2048"))
 SYSTEM = (
     "Eres un asistente en español. Contesta el último mensaje del usuario "
     "de forma concreta. Si es un acertijo o una pregunta, da la respuesta. "
@@ -20,14 +20,8 @@ SYSTEM = (
 )
 
 
-def compact_messages(raw: list, model: str) -> list[dict]:
+def compact_messages(raw: list) -> list[dict]:
     hist = [m for m in raw if m.get("role") in ("user", "assistant")]
-    if model.endswith("0.6b"):
-        last = next((m["content"] for m in reversed(hist) if m.get("role") == "user"), "")
-        return [
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": last},
-        ]
     return [{"role": "system", "content": SYSTEM}, *hist[-8:]]
 
 HTML = r"""<!DOCTYPE html>
@@ -36,7 +30,7 @@ HTML = r"""<!DOCTYPE html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Cache-Control" content="no-store" />
-  <title>Qwen3 0.6B · chat</title>
+  <title>Phi-4 Mini · chat</title>
   <style>
     :root {
       --bg: #0e1116;
@@ -111,14 +105,10 @@ HTML = r"""<!DOCTYPE html>
 <body>
   <header>
     <div>
-      <h1>Qwen3 · chat</h1>
-      <div class="meta">0.6B por defecto: respuestas básicas y rápidas. 1.7B si necesitás más coherencia.</div>
+      <h1>Phi-4 Mini · <span>chat</span></h1>
+      <div class="meta">3.8B · CPU · 1 modelo · contexto 2048 tokens</div>
     </div>
     <div class="right">
-      <select id="model">
-        <option value="qwen3:0.6b" selected>Qwen3 0.6B · rápido</option>
-        <option value="qwen3:1.7b">Qwen3 1.7B · mejor chat</option>
-      </select>
       <div id="mode" class="off">sin thinking</div>
       <label class="toggle">
         <input id="think" type="checkbox" />
@@ -127,7 +117,7 @@ HTML = r"""<!DOCTYPE html>
     </div>
   </header>
   <main id="log">
-    <div class="empty" id="empty">Modelo rápido: 0.6B. Preguntas básicas, respuesta corta. No busca internet ni tus archivos a menos que armen RAG.</div>
+    <div class="empty" id="empty">Phi-4 Mini en CPU. Buen equilibrio calidad/velocidad. No busca internet ni tus archivos salvo que armes un RAG.</div>
   </main>
   <footer>
     <form id="form">
@@ -143,7 +133,6 @@ HTML = r"""<!DOCTYPE html>
     const send = document.getElementById("send");
     const thinkBox = document.getElementById("think");
     const mode = document.getElementById("mode");
-    const modelSel = document.getElementById("model");
     const messages = [];
 
     function syncMode() {
@@ -216,7 +205,7 @@ HTML = r"""<!DOCTYPE html>
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages, enable_thinking: showThink, model: modelSel.value })
+          body: JSON.stringify({ messages, enable_thinking: showThink })
         });
         if (!res.ok) throw new Error(await res.text());
         const reader = res.body.getReader();
@@ -293,16 +282,17 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         enable_thinking = body.get("enable_thinking") is True
-        model = body.get("model") if body.get("model") in ALLOWED_MODELS else MODEL
-        messages = compact_messages(list(body.get("messages") or []), model)
+        messages = compact_messages(list(body.get("messages") or []))
         payload = {
-            "model": model,
+            "model": MODEL,
             "messages": messages,
             "stream": True,
             "think": enable_thinking,
             "options": {
+                "num_ctx": NUM_CTX,
+                "num_thread": int(os.environ.get("NUM_THREAD", "10")),
                 "temperature": 0.7,
-                "repeat_penalty": 1.35,
+                "repeat_penalty": 1.1,
                 "top_p": 0.9,
             },
         }

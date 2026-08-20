@@ -1,27 +1,31 @@
 services:
   ollama:
     build: .
-    image: qwen3-ollama:0.6b
-    container_name: qwen3-ollama
+    image: phi4-mini-ollama:3.8b
+    container_name: phi4-ollama
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      MODEL: qwen3:0.6b
+      MODEL: phi4-mini
       OLLAMA_HOST: 0.0.0.0
       OLLAMA_KEEP_ALIVE: 24h
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_CONTEXT_LENGTH: "2048"
+      NUM_CTX: "2048"
     restart: unless-stopped
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: qwen3-webui
+    container_name: phi4-webui
     ports:
       - "3000:8080"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
       WEBUI_AUTH: "false"
-      DEFAULT_MODELS: qwen3:0.6b
+      DEFAULT_MODELS: phi4-mini
     depends_on:
       ollama:
         condition: service_healthy
@@ -31,7 +35,7 @@ services:
 
   live-chat:
     image: python:3.12-alpine
-    container_name: qwen3-live-chat
+    container_name: phi4-live-chat
     ports:
       - "3001:3001"
     depends_on:
@@ -39,8 +43,9 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-      MODEL: qwen3:0.6b
+      MODEL: phi4-mini
       PORT: "3001"
+      NUM_CTX: "2048"
     volumes:
       - ./scripts/live_chat.py:/app/live_chat.py:ro
     command: ["python", "-u", "/app/live_chat.py"]
@@ -49,14 +54,15 @@ services:
   bench:
     image: python:3.12-alpine
     profiles: ["bench"]
-    container_name: qwen3-bench
+    container_name: phi4-bench
     depends_on:
       ollama:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-      MODEL: qwen3:0.6b
+      MODEL: phi4-mini
       NUM_PREDICT: "128"
+      NUM_CTX: "2048"
       ROUNDS: "3"
     volumes:
       - ./scripts/bench.py:/bench.py:ro
